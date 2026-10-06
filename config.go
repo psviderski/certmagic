@@ -1309,13 +1309,16 @@ func (cfg *Config) getACMEChallengeInfo(ctx context.Context, identifier string, 
 	var challengeFound bool
 	for _, issuer := range cfg.Issuers {
 		issuerKeys := []string{issuer.IssuerKey()}
+		cfg.Logger.Debug("### get challenge using issuer", zap.String("issuer", issuerKeys[0]))
 		// ACME issuer retries use TestCA and store challenges under TestCA, while IssuerKey still
 		// identifies the primary CA. Check both so another instance can solve a challenge initiated
 		// by a retry.
 		if acmeWrapper, ok := issuer.(acmeCapable); ok {
+			cfg.Logger.Debug("### issuer is ACME capable")
 			acmeIssuer := acmeWrapper.GetACMEIssuer()
 			if acmeIssuer != nil && acmeIssuer.TestCA != "" {
 				if testKey := acmeIssuer.issuerKey(acmeIssuer.TestCA); testKey != issuerKeys[0] {
+					cfg.Logger.Debug("### using staging CA as well", zap.String("key", testKey))
 					issuerKeys = append(issuerKeys, testKey)
 				}
 			}
@@ -1328,11 +1331,14 @@ func (cfg *Config) getACMEChallengeInfo(ctx context.Context, identifier string, 
 			}
 			tokenKey = ds.challengeTokensKey(identifier)
 			var err error
+			cfg.Logger.Debug("### trying to Load", zap.String("key", tokenKey))
 			chalInfoBytes, err = cfg.Storage.Load(ctx, tokenKey)
 			if err == nil {
+				cfg.Logger.Debug("### FOUND!", zap.String("key", tokenKey))
 				challengeFound = true
 				break
 			}
+			cfg.Logger.Debug("### Load result", zap.String("err", err.Error()))
 			if errors.Is(err, fs.ErrNotExist) {
 				continue
 			}
