@@ -1316,14 +1316,11 @@ func (cfg *Config) getACMEChallengeInfo(ctx context.Context, identifier string, 
 		// ACME issuer retries use TestCA and store challenges under TestCA, while IssuerKey still
 		// identifies the primary CA. Check both so another instance can solve a challenge initiated
 		// by a retry.
-		if acmeWrapper, ok := issuer.(acmeCapable); ok {
-			cfg.Logger.Debug("### issuer is ACME capable")
-			acmeIssuer := acmeWrapper.GetACMEIssuer()
-			if acmeIssuer != nil && acmeIssuer.TestCA != "" {
-				if testKey := acmeIssuer.issuerKey(acmeIssuer.TestCA); testKey != issuerKeys[0] {
-					cfg.Logger.Debug("### using staging CA as well", zap.String("key", testKey))
-					issuerKeys = append(issuerKeys, testKey)
-				}
+		if acmeIss, ok := issuer.(*ACMEIssuer); ok && acmeIss.TestCA != "" {
+			cfg.Logger.Debug("### issuer is ACME")
+			if testKey := acmeIss.issuerKey(acmeIss.TestCA); testKey != issuerKeys[0] {
+				cfg.Logger.Debug("### using staging CA as well", zap.String("key", testKey))
+				issuerKeys = append(issuerKeys, testKey)
 			}
 		}
 
