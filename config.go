@@ -1275,8 +1275,6 @@ func (cfg *Config) TLSConfig() *tls.Config {
 	}
 }
 
-type acmeCapable interface{ GetACMEIssuer() *ACMEIssuer }
-
 var errNoACMEChallengeInfo = errors.New("no active ACME challenge")
 
 // getACMEChallengeInfo loads the challenge info from either the internal challenge memory
