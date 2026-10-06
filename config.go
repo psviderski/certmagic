@@ -1309,7 +1309,10 @@ func (cfg *Config) getACMEChallengeInfo(ctx context.Context, identifier string, 
 	var challengeFound bool
 	for _, issuer := range cfg.Issuers {
 		issuerKeys := []string{issuer.IssuerKey()}
-		cfg.Logger.Debug("### get challenge using issuer", zap.String("issuer", issuerKeys[0]))
+		cfg.Logger.Debug("### get challenge using issuer",
+			zap.String("issuer", issuerKeys[0]),
+			zap.String("issuer_type", fmt.Sprintf("%T", issuer)),
+		)
 		// ACME issuer retries use TestCA and store challenges under TestCA, while IssuerKey still
 		// identifies the primary CA. Check both so another instance can solve a challenge initiated
 		// by a retry.
