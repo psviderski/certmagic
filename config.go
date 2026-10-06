@@ -1275,6 +1275,8 @@ func (cfg *Config) TLSConfig() *tls.Config {
 	}
 }
 
+type acmeCapable interface{ GetACMEIssuer() *ACMEIssuer }
+
 var errNoACMEChallengeInfo = errors.New("no active ACME challenge")
 
 // getACMEChallengeInfo loads the challenge info from either the internal challenge memory
@@ -1306,21 +1308,39 @@ func (cfg *Config) getACMEChallengeInfo(ctx context.Context, identifier string, 
 	var tokenKey string
 	var challengeFound bool
 	for _, issuer := range cfg.Issuers {
-		ds := distributedSolver{
-			storage:                cfg.Storage,
-			storageKeyIssuerPrefix: storageKeyACMECAPrefix(issuer.IssuerKey()),
+		issuerKeys := []string{issuer.IssuerKey()}
+		// ACME issuer retries use TestCA and store challenges under TestCA, while IssuerKey still
+		// identifies the primary CA. Check both so another instance can solve a challenge initiated
+		// by a retry.
+		if acmeWrapper, ok := issuer.(acmeCapable); ok {
+			acmeIssuer := acmeWrapper.GetACMEIssuer()
+			if acmeIssuer != nil && acmeIssuer.TestCA != "" {
+				if testKey := acmeIssuer.issuerKey(acmeIssuer.TestCA); testKey != issuerKeys[0] {
+					issuerKeys = append(issuerKeys, testKey)
+				}
+			}
 		}
-		tokenKey = ds.challengeTokensKey(identifier)
-		var err error
-		chalInfoBytes, err = cfg.Storage.Load(ctx, tokenKey)
-		if err == nil {
-			challengeFound = true
+
+		for _, issuerKey := range issuerKeys {
+			ds := distributedSolver{
+				storage:                cfg.Storage,
+				storageKeyIssuerPrefix: storageKeyACMECAPrefix(issuerKey),
+			}
+			tokenKey = ds.challengeTokensKey(identifier)
+			var err error
+			chalInfoBytes, err = cfg.Storage.Load(ctx, tokenKey)
+			if err == nil {
+				challengeFound = true
+				break
+			}
+			if errors.Is(err, fs.ErrNotExist) {
+				continue
+			}
+			return Challenge{}, false, fmt.Errorf("opening distributed challenge token file %s: %w", tokenKey, err)
+		}
+		if challengeFound {
 			break
 		}
-		if errors.Is(err, fs.ErrNotExist) {
-			continue
-		}
-		return Challenge{}, false, fmt.Errorf("opening distributed challenge token file %s: %w", tokenKey, err)
 	}
 	if !challengeFound {
 		return Challenge{}, false, fmt.Errorf("%w: no information found to solve challenge for identifier: %s", errNoACMEChallengeInfo, identifier)
